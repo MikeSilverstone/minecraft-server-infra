@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  Deploy vanilla Minecraft server to EC2
+Parameters:
+  InstanceType:
+    Type: String
+    Description: |
+      Type of EC2 instance, defaults to t3.small (2 core, 2GB)
+    Default: 't3.small'
+    AllowedValues:
+      - 't3.small'
+      - 't3.medium'
+      - 't3.large'
+      - 't3.xlarge'
+  UserData:
+    Type: String
+    Default: |
+      #!/bin/bash
+      sudo apt update
+      sudo apt install --assume-yes screen openjdk-17-jdk openjdk-17-jre
+      mkdir minecraft
+      cd minecraft
+      wget https://piston-data.mojang.com/v1/objects/c9df48efed58511cdd0213c56b9013a7b5c9ac1f/server.jar      
+      mv server.jar minecraft_server.1.19.3.jar
+      java -Xmx1024M -Xms1024M -jar minecraft_server.1.19.3.jar nogui
+      sed -i 's/eula=false/eula=true/' eula.txt
+      screen -S "Minecraft server"
+      java -Xmx1024M -Xms1024M -jar minecraft_server.1.19.3.jar nogui
+Resources:
+  MinecraftKeyPair:
+    Type: 'AWS::EC2::KeyPair'
+    Properties:
+      KeyName: MinecraftKeyPair
+  MinecraftSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and standard Minecraft port 25565
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22565
+          ToPort: 25565
+          CidrIp: 0.0.0.0/0
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: "ami-05e786af422f8082a"
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref MinecraftKeyPair
+      SecurityGroups:
+      - !Ref MinecraftSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sdm"
+          Ebs:
+            VolumeType: "gp3"
+            Iops: "3000"
+            DeleteOnTermination: "false"
+            VolumeSize: "4"
+        - DeviceName: "/dev/sdk"
+          NoDevice: { }
+      UserData:
+        Fn::Base64: !Ref UserData
